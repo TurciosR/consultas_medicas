@@ -1,0 +1,122 @@
+<?php
+include('_core.php');
+require('html_table.php');
+require('num2letras.php');
+//Obtener valores por $_GET
+
+$id_credito = $_REQUEST["id_credito"];
+class PDF extends PDF_HTML_Table
+{
+     //ancho por columna, 10 Columnas
+  public $weights=array(10,20,30,80,45);
+
+public function Header()
+{
+  $id_credito = $_REQUEST["id_credito"];
+  $sql = _query("SELECT * FROM credito WHERE id_credito ='$id_credito'");
+  $datos = _fetch_array($sql);
+  $nombre = utf8_decode(Mayu($datos["cliente"]));
+  // Consultar la base de datos configuracion
+   $sql_empresa = "SELECT e.*, d.nombre_departamento, m.nombre_municipio FROM empresa as e, departamento as d, municipio as m WHERE d.id_departamento=e.departamento AND m.id_municipio=e.municipio AND e.id_empresa='1'";
+
+  $resultado_emp=_query($sql_empresa);
+  $num_rows = _num_rows($resultado_emp);
+  $row_emp=_fetch_array($resultado_emp);
+	$empresa=utf8_decode($row_emp['nombre']);
+  $direct = utf8_decode(Mayu($row_emp["direccion"]));
+  $municipio = utf8_decode(Mayu($row_emp["nombre_municipio"]));
+  $departamento = utf8_decode(Mayu($row_emp["nombre_departamento"]));
+  $direccion = $direct.", ".$municipio.", ".$departamento;
+	$telefonos=$row_emp['telefono1'].'   '.$row_emp['telefono2'];
+  $logo=$row_emp['logo'];
+
+	//Title
+  $fechaprint=date('d-m-Y');
+  $title0="DETALLE DE CRÉDITO";
+  $title2="FECHA IMPRESION : ".$fechaprint;
+  $this->SetLeftMargin(16); 
+	$this->SetFont('Arial','B',11);
+	$this->Cell(0,6,$empresa,0,1,'C');
+  $this->SetFont('Arial','B',10);
+  $this->Cell(0,6,$direccion,0,1,'C');
+  $this->Cell(0,6,utf8_decode($title0),0,1,'C');
+  $this->SetFont('Arial','B',8);
+  $this->Cell(0,6,utf8_decode($nombre),0,1,'C');
+  $this->SetFont('Arial','B',8);
+  $this->Cell(0,6,$title2,0,1,'C');
+
+  //$this->Image($logo,10,10,30,20);
+	$this->Ln(6);
+
+$tableData=array("No.","FECHA","MONTO","OBSERVACIONES", "PAGADO");
+
+ $this->SetFillColor(192,192,192);
+ $this->SetTextColor(0);
+ $this->SetFont('Arial','B',8);
+
+   $x=$this->GetX();
+   $y=$this->GetY();
+   $he=5; //altura
+   $nb=1; //lineas
+   $w=$this->weights;
+   for ($i=0;$i<5;$i++) {
+       $x=$this->GetX();
+       $y=$this->GetY();
+       $this->Rect($x, $y, $w[$i], $he*$nb);
+      $datoss=$tableData[$i].' ';
+      $this->MultiCell($w[$i], $he, $tableData[$i].' ', 0,'C',1);
+   //Put the position to the right of the cell
+   $this->SetXY($x+$w[$i], $y);
+   }
+   $this->Ln($he*$nb);
+     $this->SetFont('Arial','',8);
+
+  //Ensure table header is output
+	parent::Header();
+}
+
+}
+//sql stock producto
+$htmlTable="<TABLE>";
+//sql stock antiguo
+$sql="SELECT  * FROM abono_credito WHERE id_credito='$id_credito' ORDER BY fecha ASC";
+//GROUP BY  producto.id_producto,movimiento_producto.fecha_movimiento,movimiento_producto.numero_doc
+$result=_query($sql);
+
+  $sql0 = _query("SELECT moneda, simbolo FROM empresa WHERE id_empresa='1'");
+  $datos_moneda = _fetch_array($sql0);
+  $simbolo = $datos_moneda["simbolo"];  
+  $moneda = $datos_moneda["moneda"];
+
+//Create Table
+$i = 1;
+$totalg= 0;
+while($row = _fetch_array($result))
+{
+  $fecha=ED($row['fecha']);
+  $fechaprint=$fecha;
+  $total=$row['monto'];
+  $observaciones=$row['observaciones'];
+  $pagado= "NO";
+  if($row['pagado'])
+    $pagado="SI";
+  $htmlTable.=	'<TR><TD>'.$i.'</TD>';
+  $htmlTable.=	'<TD>'.$fechaprint.'</TD>';
+  $htmlTable.=	'<TD>'.$simbolo.''.number_format($total,2,".",",").'</TD>';
+  $htmlTable.=	'<TD>'.utf8_decode(Mayu($observaciones)).'</TD>';
+  $htmlTable.=	'<TD>'.$pagado.'</TD>';
+  $htmlTable.=	'</TR>';
+  $i++;
+  $totalg +=$total;
+}
+
+$htmlTable.="<TR><TD></TD><TD>TOTAL</TD><TD>".$simbolo."".number_format($totalg,2,".",",")."</TD><TD></TD><TD></TD></TR>";
+$htmlTable.='</TABLE>';
+
+$pdf=new PDF();
+$pdf->AliasNbPages();
+$pdf->AddPage('P','Letter');
+$pdf->SetFont('Arial','',8);
+$pdf->WriteHTML("$htmlTable");
+$pdf->Output("reporte_credito.pdf","I");
+?>
